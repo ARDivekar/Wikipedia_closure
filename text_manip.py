@@ -9,6 +9,53 @@ from xgoogle.search import GoogleSearch, SearchError
 import os
 import random
 
+def remove_after(regex, text):
+	found_string= re.findall(pattern=regex, string=text) #only take the first; we can run this as many times as necessary	
+	index=-1
+	if found_string is not []:
+		for x in found_string:
+			x=ensure_ASCII(x)
+			index=text.find(x)
+	if index!=-1:
+		return text[:index]
+	else:
+		return text
+
+
+def remove_HTML_perfect(html, tag, class_list=[], tag_id=None):
+	soup=BeautifulSoup(html)
+	if class_list is not [] and class_list is not None:
+		for class_ in class_list:
+			[s.extract() for s in soup(tag, class_=class_)]
+	if tag_id is not None:
+		[s.extract() for s in soup(tag, id_=tag_id)]
+	return soup.prettify()
+
+def regex_and_replace_first(regex, text, replacement):
+	# takes a regex pattern, and replaces the text that matches that regex pattern with something else
+	# this replaces the first occurence, thus making it useful to repeatedly call this in a loop with different values of the argument 'replace'
+	to_replace=re.findall(regex, text)
+	text=text.replace(to_replace[0],replacement)
+	return text
+
+
+def regex_and_replace(regex, text, replacement):
+	# takes a regex pattern, and replaces the text that matches that regex pattern with something else
+	to_replace=re.findall(regex, text)
+	for rep in to_replace:
+		text=text.replace(rep,replacement)
+	return text
+
+def regex_and_remove(regex, text): 
+	# takes a regex pattern, and removes all text that matches that regex pattern
+	to_remove=re.findall(regex, text)
+	for rem in to_remove:
+		text=text.replace(rem,"")
+	return text
+
+
+
+
 def ensure_UTF8(string_data, encoding='UTF-8'):
 	if type(string_data) is unicode:
 		return string_data
@@ -36,12 +83,15 @@ def rectify_folder_path(folderpath):
 	return folderpath
 
 def make_directory_if_not_exists(folderpath, printing=True):
+	#	returns true if we make the directory
 	folderpath=rectify_folder_path(folderpath)
 	if not os.path.exists(folderpath):
 		os.makedirs(folderpath)
+		return True
 	else:
 		if printing:
 			print "\nThe folder %s already exists."%(folderpath)
+		return False
 
 
 
@@ -78,6 +128,7 @@ def make_google_search_query(necessary_topic_list=None, topic_list=None, site_li
 def make_file_path(folderpath, filename, extension):
 	if folderpath[-1]!= "\\" and folderpath[-1]!= "/":
 		folderpath+="/"
+	filename=make_filename(filename)
 
 	return folderpath+filename[:255-len(folderpath)-len(extension)]+extension # Windows only allows filepaths upto 260 characters. I'm using 255 to be on the safe side.\
 
@@ -85,6 +136,7 @@ def make_file_path(folderpath, filename, extension):
 def make_folder_path(parent_folder_path, folder_name, char_buffer=30):
 	#we make a buffer to allow files with at least this length
 	parent_folder_path=rectify_folder_path(parent_folder_path)
+	folder_name=make_filename(folder_name)
 	folder_name=rectify_folder_path(folder_name)
 	if len(parent_folder_path)-char_buffer>=255: #max filepath length 
 		print "\nERROR: cannot make folder, exceeds max OS filepath length.\n"
@@ -459,15 +511,16 @@ def bytes_to_other(bytes):
 
 
 
-def get_file(url, folderpath="./", block_sz=8192, confirm=False): 
+def get_file(url, folderpath="./", block_sz=8192, confirm=False, printing=True): 
 	#does not work on html files
-	print "Attempting to download from URL : %s"%url
-	file_name = url.split('/')[-1] #get the last thing seperated by a '/'
+	if printing:
+		print "Attempting to download from URL : %s"%url
+	file_name = make_filename(url.split('/')[-1] )#get the last thing seperated by a '/'
 	u = urllib2.urlopen(url)
 
 	folderpath=rectify_folder_path(folderpath)
 
-	fileout_path=ensure_ASCII(folderpath+file_name)
+	fileout_path=folderpath+file_name
 	# print "\n\nfileout_path:  %s\n\n"%fileout_path
 
 	try: 
@@ -479,8 +532,9 @@ def get_file(url, folderpath="./", block_sz=8192, confirm=False):
 			if y_or_n.lower() != 'y':
 				exit(0)
 
-		print "Downloading: %s\nBytes: %s" % (file_name, file_size)
-		print "Writing to: %s"%fileout_path
+		if printing:
+			print "Downloading: %s\nBytes: %s" % (file_name, file_size)
+			print "Writing to: %s"%fileout_path
 
 		f = open(fileout_path, 'wb')
 		file_size_dl = 0
@@ -493,15 +547,18 @@ def get_file(url, folderpath="./", block_sz=8192, confirm=False):
 		    f.write(buffer)
 		    status = r"%10d  [%3.2f%%]" % (file_size_dl, file_size_dl * 100. / file_size)
 		    status = status + chr(8)*(len(status)+1)
-		    print status,
+		    if printing:
+			    print status,
 
 		f.close()
 	except Exception:
 		f = open(fileout_path, 'wb')
 		f.write(u.read())
 		f.close()
-		print "Done downloading : %s"%url
-	print ""
+		if printing:
+			print "Done downloading : %s"%url
+	if printing:
+		print ""
 	return fileout_path
 
 

@@ -125,105 +125,108 @@ class HTML_page_Obj: #uses urllib2
 
 
 class Wiki_page_obj:
-	def __init__(self, wikipedia_url):
+	def __init__(self, wikipedia_url, just_heading=False):
+		#	inherit items from the HTML_page_Obj: 
 		self._page = HTML_page_Obj(wikipedia_url)	
 		self.url=self._page.url
+
 		self.wiki_domain = text_manip.extract_website(self.url)  #gets en.wikipedia.org, etc. in different languages
+
+		#	make the soup of the HTML and get the HTML, prettified:
 		soup=self._page.html_soup_and_prettify()
 		self.html=self._page.html  #prettified, in UTF-8 format
+
+		#	Get the heading of the Wikipedia page:
 		self.heading =text_manip.ensure_UTF8(BeautifulSoup('''%s'''%soup.find("h1", id="firstHeading", class_="firstHeading")).get_text().strip())
 		
-		# soup=BeautifulSoup(self.html)
-		article_soup=soup.find("div", id="mw-content-text")  #might come in handy later
-		self.article_html=text_manip.ensure_UTF8(article_soup.prettify())
 
-		self.article_links=[]
-		self.wiki_links_to_real_map={}   #maps wiki-links to real hyperlinks, that we can extract using urrlib2
-		self.real_links_to_wiki_article_map={}
-		self.img_links=[]
-		self.wiki_img_links_to_real_map={}
-		self.real_links_to_wiki_img_map={}
-		self.media_links=[]
-		self.wiki_media_links_to_real_map={}
-		self.real_links_to_wiki_media_map={}
-		# count=1
-		# other_count=1
-		print soup.find_all('a')
-		''' 
-		for img_link_tag in soup.find_all('a'):
-			img_link=img_link_tag.get('href')
+		if just_heading==False: # prevents a lot of unecessary processing if True
 
-			if  img_link[:6]=="/wiki/" and "/wiki/Special:" not in img_link and "/wiki/Template:" not in img_link and "/wiki/Portal:" not in img_link and "/wiki/Wikipedia:" not in img_link and "/wiki/Help:" not in img_link:  #only extracts links to wikipedia 
-				img_link=text_manip.ensure_UTF8(img_link)		
-				mapped_link="https://"+self.wiki_domain+img_link
-				if img_link[:11]=="/wiki/File:":
-					if link[-4:]=='.ogg': #video or audio file
-						self.wiki_media_links_to_real_map[link]=mapped_link
-						self.media_links.append(mapped_link)
-					else: 
-						self.wiki_img_links_to_real_map[link]=mapped_link
-						self.img_links.append(mapped_link)
-		''' 
+		#	Make a soup of the article html, set the article html:
+			article_soup=soup.find("div", id="mw-content-text")  #might come in handy later
+			self.article_html=text_manip.ensure_UTF8(article_soup.prettify())
+			temp_art_html=self.article_html
+			temp_art_html=text_manip.remove_HTML_perfect(html=temp_art_html, tag="div", class_list=["reflist"])
+			temp_art_html=text_manip.remove_after(regex='<span.*?id="References"', text=temp_art_html)
+			temp_art_html=text_manip.remove_after(regex='<span.*?id="See_also"', text=temp_art_html)
+			temp_art_html=text_manip.remove_after(regex='<span.*?id="Further_reading"', text=temp_art_html)
+			temp_art_html=text_manip.remove_after(regex='<span.*?id="External_links"', text=temp_art_html)
+			article_soup=BeautifulSoup(temp_art_html)
 
-		for link_tag in article_soup.find_all('a'):
-			link=link_tag.get('href')
-			# print count,"]",link
-			# count+=1
 			
-			if  link[:6]=="/wiki/" and "/wiki/Special:" not in link and "/wiki/Template:" not in link and "/wiki/Portal:" not in link and "/wiki/Wikipedia:" not in link and "/wiki/Help:" not in link:  #only extracts links to wikipedia article pages
-				# print "\t",other_count,"]",link
-				# other_count+=1
+		#	Get the links from the article HTML:
 
-				link=text_manip.ensure_UTF8(link)		
-				mapped_link="https://"+self.wiki_domain+link
+			self.article_links=[] # real links, from article
+			self.img_links=[] # real direct links, from article
+			self.direct_img_to_img_map={}
+			self.media_links=[] # real links, from article
 
-				if link[:11] != "/wiki/File:":
-					self.wiki_links_to_real_map[link]=mapped_link
-					self.real_links_to_wiki_article_map[mapped_link]=link
-					self.article_links.append(mapped_link)
-				else :
-					if link[-4:]=='.ogg': #video or audio file
-						self.wiki_media_links_to_real_map[link]=mapped_link
-						self.media_links.append(mapped_link)
-						self.real_links_to_wiki_media_map[mapped_link]=link
-					else: 
-						self.wiki_img_links_to_real_map[link]=mapped_link
-						self.img_links.append(mapped_link)
-						self.real_links_to_wiki_img_map[mapped_link]=link
+			
+
+			
+			not_allowed_in_url_from_article=["/wiki/Special:", "/wiki/Template:", "/wiki/Portal:", "/wiki/Wikipedia:", "/wiki/Help:", "redlink=1"]
+			
+			for link_tag in article_soup.find_all('a'):
+				link=link_tag.get('href')
+
+				if link is not None and link[:6]=="/wiki/": #only extracts links to wikipedia 
+					allowed_flag=True
+					for allowed_test in not_allowed_in_url_from_article:
+						if allowed_test in link:
+							allowed_flag=False
+							break
+
+					if allowed_flag:
+						link=text_manip.ensure_UTF8(link)		
+						mapped_link="https://"+self.wiki_domain+link
+
+						if link[:11] != "/wiki/File:":
+							self.article_links.append(mapped_link)
+						else :
+							if link[-4:]=='.ogg': #video or audio file
+								self.media_links.append(mapped_link)
+							else:  # image file
+								img_tag=link_tag.img
+								# print "\n\n"
+								# print "link_tag :",link_tag
+								# print "\timg_tag :",img_tag
+								if img_tag is not None:
+									direct_img_link=img_tag.get('src')
+									# print "\t\tdirect_img_link :",direct_img_link
+									self.img_links.append(direct_img_link)
+									self.direct_img_to_img_map[direct_img_link]=mapped_link
+
+
+			self.article_links=list(set(self.article_links))
+			self.img_links=list(set(self.img_links))
+			self.media_links=list(set(self.media_links))
+
+
+			#	replace the /wiki/ links for actual links. Presetve the old html, and use replaced_html from now on
+
+			self.replaced_html=self.html
+			for link_tag in soup.find_all('a'):
+				link=link_tag.get('href')
+				if link is not None:
+				 	if link[:6]=="/wiki/":
+						mapped_link="https://"+self.wiki_domain+link
+						self.replaced_html=self.replaced_html.replace('href="%s'%link, 'href="%s'%mapped_link)
 
 		
-
-
-
-		self.article_links=list(set(self.article_links))
-		self.img_links=list(set(self.img_links))
-		self.media_links=list(set(self.media_links))
-		# print "\n\n\narticle_links:\n\n"
-		# for i in self.article_links:
-		# 	print i
-		# print "\n\n\nimg_links:\n\n"
-		# for i in self.img_links:
-		# 	print i
-		# print "\n\n\nmedia_links:\n\n"
-		# for i in self.media_links:
-		# 	print i
-
-
-
-		
-		# self.replaced_html=self.html
-		# for wiki_link in self.wiki_links_to_real_map:
-		# 	re.sub(wiki_link, self.wiki_links_to_real_map[wiki_link], self.replaced_html)
+					
 
 
 	def get_external_styling(self):
 		return self._page.get_external_styling()
 
-	def write_to_file(self, folderpath):
+	def write_to_file(self, folderpath, replaced=True):
 		file_path=text_manip.make_file_path(folderpath, filename=self.heading.strip(), extension=".html")
 		# print "self.html type: %s"%type(self.html)
 		with open(file_path,"w") as output_file:
-			output_file.write(text_manip.ensure_ASCII(self.html))
+			if replaced: 
+				output_file.write(text_manip.ensure_ASCII(self.replaced_html))
+			else: 
+				output_file.write(text_manip.ensure_ASCII(self.html))
 		return file_path
 
 
@@ -232,118 +235,178 @@ class Wiki_page_obj:
 		
 
 
-
-
-
-
-		'''this makes a dict of the form {'article_heading':['article_hyperlink1', 'article_hyperlink2', ....]}
-			The assumption is that wikipedia article headings are unique, but several links redirect to the same article.
-			Eg: "Andrew Grove" and "Andy Grove" redirect to the same article about the Intel co-founder.
-			This assumption is justified, because things like https://en.wikipedia.org/wiki/Thread_(computing) 
-			have the heading "Thread (computing)", and things like https://en.wikipedia.org/wiki/Threads_(Stargate_SG-1), 
-			have the heading "Threads (Stargate SG-1)".
-		'''
-
-
-
 class Wikipedia_img_page_object:
 	#the images on wikipedia pages are their own images
 	# the urls are of type:	https://<wiki domain>/wiki/File:<image name>.<extension>
-	def __init__(self, wikipedia_image_url):
-		img_page=HTML_page_Obj(wikipedia_image_url)
-		img_soup=img_page.make_soup()
-		# print img_soup.find('div', _class="mw-filepage-resolutioninfo")
-
-		self.main_img_link=img_soup.find('div', class_="fullMedia").find('a', class_="internal").get('href')
-		if self.main_img_link[:9]=="//upload.":
-			self.main_img_link="https:"+self.main_img_link
-		
-
-		img_links_soup=img_soup.find("div", class_="mw-filepage-resolutioninfo")
-		self.img_px_to_links_map={} #maps the product of height and width to tuples of pixel dimensions and their links
-		for img_link in img_links_soup.find_all('a'):
-			actual_link=img_link.get('href')
-
-			if actual_link[:9]=="//upload.":
-				actual_link="https:"+actual_link
-
-			img_link_text= text_manip.ensure_UTF8(re.sub(",","", img_link.get_text()) )
-			# print text_manip.ensure_ASCII("\n\nimg_link_text: %s"%img_link_text)
-			img_dimensions = re.findall('\d+', img_link_text)
-			width=int(img_dimensions[0])
-			height=int(img_dimensions[1])
-			if len(img_dimensions)==2:
-				self.img_px_to_links_map[width*height]=( actual_link, width, height ) #does mapping
-			else: print "Cannot use image %s, which is at %s with dimensions %s"%(wikipedia_image_url, img_link.get('href'), img_dimensions)
-
+	def __init__(self, wikipedia_image_url=None, direct_url=None):
+		self.direct_image_link=None
 		self.saved_path=None
 		self.saved_filename=None
 
+		if direct_url is not None:
+			self.direct_image_link=direct_url
 
-	def download_main_image(self,folderpath):
-		self.saved_path=text_manip.get_file( url=self.main_img_link, folderpath=folderpath )
+
+		elif wikipedia_image_url is not None:
+			img_page=HTML_page_Obj(wikipedia_image_url)
+			img_soup=img_page.make_soup()
+			# print img_soup.find('div', _class="mw-filepage-resolutioninfo")
+
+			self.main_img_link=img_soup.find('div', class_="fullMedia").find('a', class_="internal").get('href')
+			if self.main_img_link[:9]=="//upload.":
+				self.main_img_link="https:"+self.main_img_link
+			
+			
+
+			img_links_soup=img_soup.find("div", class_="mw-filepage-resolutioninfo")
+			self.img_px_to_links_map={} #maps the product of height and width to tuples of pixel dimensions and their links
+			for img_link in img_links_soup.find_all('a'):
+				actual_link=img_link.get('href')
+
+				if actual_link[:9]=="//upload.":
+					actual_link="https:"+actual_link
+
+				img_link_text= text_manip.ensure_UTF8(re.sub(",","", img_link.get_text()) )
+				# print text_manip.ensure_ASCII("\n\nimg_link_text: %s"%img_link_text)
+				img_dimensions = re.findall('\d+', img_link_text)
+				width=int(img_dimensions[0])
+				height=int(img_dimensions[1])
+				if len(img_dimensions)==2:
+					self.img_px_to_links_map[width*height]=( actual_link, width, height ) #does mapping
+				else: print "Cannot use image %s, which is at %s with dimensions %s"%(wikipedia_image_url, img_link.get('href'), img_dimensions)
+
+
+	def download_direct_image(self,folderpath, printing=False):
+		if self.direct_image_link is not None:
+			link = self.direct_image_link #don'e modify self.direct_image_link
+			if link[:6] != "https:":
+				link="https:"+link
+			self.saved_path=text_manip.get_file( url=link, folderpath=folderpath, printing=False)
+			self.saved_filename=self.saved_path.split('/')[-1]
+		else:
+			download_main_image(folderpath, printing)
+
+
+	def download_main_image(self,folderpath, printing=False):
+		self.saved_path=text_manip.get_file( url=self.main_img_link, folderpath=folderpath, printing=False)
+		self.direct_image_link=self.main_img_link.split("https:")[-1]
 		self.saved_filename=self.saved_path.split('/')[-1]
-		print "\n\n\nself.saved_filename:",self.saved_filename
+		if printing:
+			print "\n\n\nself.saved_filename:",self.saved_filename
 
-	def download_largest_image(self, folderpath):
+	def download_largest_image(self, folderpath, printing=False):
 		if self.img_px_to_links_map!={}:
 			max_index=max(self.img_px_to_links_map)
 			max_link=self.img_px_to_links_map[max_index][0]
-			self.saved_path=text_manip.get_file( url=max_link, folderpath=folderpath ) #max(dictionary) == max key in dictionary
+			self.saved_path=text_manip.get_file( url=max_link, folderpath=folderpath, printing=False) #max(dictionary) == max key in dictionary
+			self.direct_image_link=max_link.split("https:")[-1]
+			if printing:
+				print "self.direct_image_link :",self.direct_image_link
 			self.saved_filename=self.saved_path.split('/')[-1]
 		else:
-			print "ERROR in download_smallest_image: The extraction is empty. Downloading main image instead"
+			if printing:
+				print "ERROR in download_smallest_image: The extraction is empty. Downloading main image instead"
 			self.download_main_image(folderpath)
 
 
-	def download_smallest_image(self, folderpath):
+	def download_smallest_image(self, folderpath, printing=False):
 		if self.img_px_to_links_map!={}:
 			min_index=min(self.img_px_to_links_map)
 			min_link=self.img_px_to_links_map[min_index][0]
-			self.saved_path=text_manip.get_file( url=min_link, folderpath=folderpath )
+			self.saved_path=text_manip.get_file( url=min_link, folderpath=folderpath, printing=False )
+			self.direct_image_link=min_link.split("https:")[-1]
+			if printing:
+				print "self.direct_image_link :",self.direct_image_link
 			self.saved_filename=self.saved_path.split('/')[-1] 
 		else:
-			print "ERROR in download_smallest_image: The extraction is empty. Downloading main image instead"
-			self.download_main_image(folderpath)
+			if printing:
+				print "ERROR in download_smallest_image: The extraction is empty. Downloading main image instead"
+			# self.download_main_image(folderpath)
 
 
 
-def download_wiki_page(wiki_link, parent_folder_path): 
-	#downloads wikipedia pages and images (in a seperate folder), and links the pages to the images
 
+
+def download_wiki_page(wiki_link, parent_folder_path, printing=False): 
+	#	downloads wikipedia pages and images (in a seperate folder), and links the pages to the images:
+
+	#	make an object of the wiki link:
 	wiki_obj=Wiki_page_obj(wiki_link)
 
+	#	make folder:
 	imgs_folder_name="imgs_%s"%(wiki_obj.heading)
 	imgs_folder_path=text_manip.make_folder_path(parent_folder_path=parent_folder_path, folder_name=imgs_folder_name)
-
 	text_manip.make_directory_if_not_exists(imgs_folder_path, printing=False)
 
-	img_links_to_filenames_map={}
 
+	#	download all images and make replacements to HTML:
 	for img_link in wiki_obj.img_links:
-		image=Wikipedia_img_page_object(img_link)
-		image.download_smallest_image(imgs_folder_path)
+		if printing:
+			print ""
+			print "img_link:",img_link
+	#	download image:
+		image=Wikipedia_img_page_object(direct_url=img_link)
+		image.download_direct_image(imgs_folder_path)
 
-		if image.saved_filename is not None: # maps wiki_links to saved file links
-			img_wiki_link=wiki_obj.real_links_to_wiki_img_map[img_link]
-			img_links_to_filenames_map[img_wiki_link]=image.saved_filename
+		if image.saved_filename is not None: 
+	#	make modification/s to wiki_obj.replaced_html:
+			image_filepath=text_manip.make_file_path(folderpath="./"+imgs_folder_name, filename=image.saved_filename, extension="") 
 
-	# Linking logic:
-	# Here, we edit the .html of the wiki_object directly, since  we aren't going to use it later
+	#	change <a href="____"> to <a href=image_filepath>
+			if printing:
+				print "image_filepath:",image_filepath
+			# old=wiki_obj.replaced_html
+			wiki_obj.replaced_html = wiki_obj.replaced_html.replace('href="%s'%wiki_obj.direct_img_to_img_map[img_link], 'href="%s'%image_filepath)
+			# if old == wiki_obj.replaced_html:
+			# 	print "ERROR: NO replacements of <a> href"
+
+	#	change <img src="____"> to <img src=image_filepath>
+			if printing:
+				print "image.direct_image_link:",image.direct_image_link
+			# old=wiki_obj.replaced_html
+			wiki_obj.replaced_html = wiki_obj.replaced_html.replace('src="%s'%image.direct_image_link, 'src="%s'%image_filepath)
+			# if old == wiki_obj.replaced_html:
+			# 	print "ERROR: NO replacements of <img> src"
+						
+
+	#	write replaced_html to file:
+	output_wiki_filepath = wiki_obj.write_to_file(parent_folder_path)
+
+	#	return output filepath for later use
+	return (output_wiki_filepath, wiki_obj.article_links)
 
 
 
-	output_wiki_filepath=wiki_obj.write_to_file(parent_folder_path)
+
+def link_to_style_file(style_file_path, input_html_file_path=None, input_raw_html=None, remove_external_stylesheets=False):
+	html=""
+	
+	if input_raw_html is not None:
+		html=input_raw_html
+	elif input_html_file_path is not None:
+		with open(input_html_file_path, "r") as input_html_file:
+			html=input_html_file.read()
+	else: 
+		print "ERROR: in link_to_style_file, both input_html_file and input_raw_html cannot be None"
+		exit(0)
+
+	
+	html=html.replace("</head>", '<link rel="stylesheet" href="%s"/></head>'%style_file_path)
+
+	if remove_external_stylesheets:
+		html=text_manip.regex_and_remove(regex='<link.*rel="stylesheet".*?/.*?>', text=html)
+
+	if input_raw_html is not None:
+		return html	
+
+	if input_html_file_path is not None:
+		with open(input_html_file_path, "w") as output_html_file:
+			output_html_file.write(html)
+	
 
 
 
-
-
-
-
-
-
-def wiki_get_all(root_link, max_depth=1, input_root_folderpath="./", skip_already_downloaded=False):
+def wiki_get_all(root_link, max_depth=1, input_root_folderpath="./", skip_already_downloaded=False, force_redo=False):
 
 	'''	
 	Given a root link and the input_root_folderpath, it creates a folder, input_root_folderpath/root_<root.heading>, inside which we have the root link, it's associated images, and folders "lvl1", "lvl2", etc. (i.e. as input_root_folderpath/root_<root.heading>/lvl1/, input_root_folderpath/root_<root.heading>/lvl2/, etc.), into which we must download all the links of the closure, upto "lvl<max_depth>". These are organized sequentially because it decreases the overall path length, than if the folders lvl1, lvl2 etc. were nested inside each other.
@@ -376,8 +439,8 @@ def wiki_get_all(root_link, max_depth=1, input_root_folderpath="./", skip_alread
 			- create a folder inside this as input_root_folderpath/root_<root.heading>/img_<root.heading>
 			- download its associated images to input_root_folderpath/root_<root.heading>/img_<root.heading>, modify the root's html to link to these images, then write to file the root's modified html (to input_root_folderpath/root_<root.heading>)
 			- append the root's filename and level to a dict, where 
-				- key is the root's __wiki__ url
-				- values are a tuple: (level, filename)
+				- key is the root's real url
+				- values are a tuple: (level, file_name)
 			- create a level-wise dict of all article_links of that level. For the root, that is just the root's article_links.
 			- Do the following for every level (root's level is 0):
 				- Create a folder called "lvl"+str(current_level+1) in the input_root_folderpath/root_<root.heading>
@@ -394,36 +457,78 @@ def wiki_get_all(root_link, max_depth=1, input_root_folderpath="./", skip_alread
 		We keep this as two seperate passes to reduce redundant data usage (by not downloading links that are already there) at the (minimal) cost of time. 
 	'''
 	
-	root_wiki_obj=Wiki_page_obj(root_link)
+	root_wiki_obj=Wiki_page_obj(wikipedia_url=root_link, just_heading=True) #gets only the file and its heading, no further processing
 
+	#	make root_<root.heading> folder inside input_root_folderpath:
 	root_folder_name="root_%s"%(root_wiki_obj.heading)
 	root_folder_path=text_manip.make_folder_path(parent_folder_path=input_root_folderpath, folder_name=root_folder_name)
-	
 	text_manip.make_directory_if_not_exists(root_folder_path, printing=False)
-	
-	root_wiki_obj.write_to_file(root_folder_path)
 
-	style_file_path=text_manip.make_file_path(root_folder_path, "wiki_style",".css")
-	with open(style_file_path, "w") as style_file:
+	#	download style file:
+	full_style_file_path=text_manip.make_file_path(root_folder_path, "wiki_style",".css")
+	with open(full_style_file_path, "w") as style_file:
 		style_file.write(text_manip.ensure_ASCII(root_wiki_obj.get_external_styling() ))
 
 
-	root_imgs_folder_name="imgs_%s"%(root_wiki_obj.heading)
-	root_imgs_folder_path=text_manip.make_folder_path(parent_folder_path=root_folder_path, folder_name=root_imgs_folder_name)
+	#	download the root and all of its associated images:
+	root_download_tuple=download_wiki_page(wiki_link=root_link, parent_folder_path=root_folder_path)
+	root_full_html_filepath= root_download_tuple[0]
 
-	text_manip.make_directory_if_not_exists(root_imgs_folder_path, printing=False)
 
+	#	link to style file:
+	relative_root_style_path="./"+full_style_file_path.split('/')[-1]
+	# print "relative_root_style_path:",relative_root_style_path
+	link_to_style_file(style_file_path=relative_root_style_path, input_html_file_path=root_full_html_filepath)
+
+	relative_style_path="../"+full_style_file_path.split('/')[-1]  # to be used for all other article files
 	
 
-	for img_link in root_wiki_obj.img_links:
-		image=Wikipedia_img_page_object(img_link)
-		image.download_smallest_image(root_imgs_folder_path)
+	#	make a dict of already downloaded pages. Use the relative paths
+	downloaded_pages=defaultdict(lambda:None)
+	downloaded_pages[root_link]=(0,"../"+root_full_html_filepath.split('/')[-1])
 
-	global_pages={}
-	# global_pages[link]=(<real url>, <depth>, <filename>) <---we use the depth and filename to link to the file.
+	#	make a dict of pages we must now download
+	associated_links=defaultdict(lambda:[])
+	associated_links[0]=root_download_tuple[1]
 
-	levels_links={} # a dictionary of lists of all /wiki/ links at that level
-	levels_links[1]=root_link
+
+	print "Level 0 (root level) :\n"
+	print "\tNumber of pages obtained at this level= "+str(len(downloaded_pages))
+	print "\tNumber of links to next level= "+str(len(associated_links[0]))
+
+	# for link in associated_links[0]:
+	# 	print link
+
+	for current_level in range(0,max_depth):
+		print "\n\nLevel %s :\n"%(current_level+1)
+		download_count=0
+		existing_downloaded_count=len(downloaded_pages)
+		child_folder_name="lvl%s"%(current_level+1)
+		child_folder_path=text_manip.make_folder_path(parent_folder_path=root_folder_path, folder_name=child_folder_name)
+
+		if force_redo or text_manip.make_directory_if_not_exists(child_folder_path) :
+			# i.e. if the directory does not already exist, do the following; if it does, we skip it
+			for associated_link in associated_links[current_level]:
+				if downloaded_pages[associated_link] is None:
+					download_tuple = download_wiki_page(wiki_link=associated_link, parent_folder_path=child_folder_path)
+					associated_links[current_level+1].append(download_tuple[1])
+					downloaded_pages[associated_link]=(current_level+1, "../"+child_folder_name+ download_tuple[0].split('/')[-1])
+					download_count+=1
+					print "\r\tNumber of pages downloaded so far = %s"%download_count,
+		associated_links[current_level+1]=list(set(associated_links[current_level+1]))
+
+		new_download_count=len(downloaded_pages)
+		print "\n\tNumber of pages obtained at this level= "+str(new_download_count-existing_downloaded_count)
+		print "\tNumber of links to next level= "+str(len(associated_links[current_level+1]))
+
+
+
+
+
+
+
+
+
 
 
 
