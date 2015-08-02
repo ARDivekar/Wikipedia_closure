@@ -338,7 +338,6 @@ def download_wiki_page(wiki_link, parent_folder_path, printing=False):
 	imgs_folder_path=text_manip.make_folder_path(parent_folder_path=parent_folder_path, folder_name=imgs_folder_name)
 	text_manip.make_directory_if_not_exists(imgs_folder_path, printing=False)
 
-
 	#	download all images and make replacements to HTML:
 	for img_link in wiki_obj.img_links:
 		if printing:
@@ -347,6 +346,7 @@ def download_wiki_page(wiki_link, parent_folder_path, printing=False):
 	#	download image:
 		image=Wikipedia_img_page_object(direct_url=img_link)
 		image.download_direct_image(imgs_folder_path)
+
 
 		if image.saved_filename is not None: 
 	#	make modification/s to wiki_obj.replaced_html:
@@ -368,7 +368,6 @@ def download_wiki_page(wiki_link, parent_folder_path, printing=False):
 			# if old == wiki_obj.replaced_html:
 			# 	print "ERROR: NO replacements of <img> src"
 						
-
 	#	write replaced_html to file:
 	output_wiki_filepath = wiki_obj.write_to_file(parent_folder_path)
 
@@ -511,12 +510,15 @@ def wiki_get_all(root_link, max_depth=1, input_root_folderpath="./", skip_alread
 			for associated_link in associated_links[current_level]:
 				if downloaded_pages[associated_link] is None:
 					download_tuple = download_wiki_page(wiki_link=associated_link, parent_folder_path=child_folder_path)
-					associated_links[current_level+1].append(download_tuple[1])
+					# print "\rDone Downloading",
+					if current_level+1 != max_depth:
+						associated_links[current_level+1].append(download_tuple[1])
 					downloaded_pages[associated_link]=(current_level+1, "../"+child_folder_name+ download_tuple[0].split('/')[-1])
 					download_count+=1
 					print "\r\tNumber of pages downloaded so far = %s"%download_count,
-		
-		associated_links[current_level+1]=list(set(associated_links[current_level+1][0]))
+		if current_level+1 != max_depth:
+			associated_links[current_level+1]=list(set(associated_links[current_level+1][0]))
+
 
 		new_download_count=len(downloaded_pages)
 		print "\n\tNumber of pages obtained at this level= "+str(new_download_count-existing_downloaded_count)
