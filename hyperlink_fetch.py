@@ -515,7 +515,8 @@ def wiki_get_all(root_link, max_depth=1, input_root_folderpath="./", skip_alread
 					downloaded_pages[associated_link]=(current_level+1, "../"+child_folder_name+ download_tuple[0].split('/')[-1])
 					download_count+=1
 					print "\r\tNumber of pages downloaded so far = %s"%download_count,
-		associated_links[current_level+1]=list(set(associated_links[current_level+1]))
+		
+		associated_links[current_level+1]=list(set(associated_links[current_level+1][0]))
 
 		new_download_count=len(downloaded_pages)
 		print "\n\tNumber of pages obtained at this level= "+str(new_download_count-existing_downloaded_count)
