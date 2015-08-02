@@ -139,41 +139,76 @@ class Wiki_page_obj:
 
 		self.article_links=[]
 		self.wiki_links_to_real_map={}   #maps wiki-links to real hyperlinks, that we can extract using urrlib2
+		self.real_links_to_wiki_article_map={}
 		self.img_links=[]
 		self.wiki_img_links_to_real_map={}
+		self.real_links_to_wiki_img_map={}
 		self.media_links=[]
 		self.wiki_media_links_to_real_map={}
+		self.real_links_to_wiki_media_map={}
 		# count=1
 		# other_count=1
-		for link_tag in article_soup.find_all('a'):
-			link=link_tag.get('href')
-			# print count,"]",link
-			# count+=1
-			
-			if  link[:6]=="/wiki/" and "/wiki/Special:" not in link and "/wiki/Template:" not in link and "/wiki/Portal:" not in link:  #only extracts links to wikipedia article pages
-				# print "\t",other_count,"]",link
-				# other_count+=1
+		print soup.find_all('a')
+		''' 
+		for img_link_tag in soup.find_all('a'):
+			img_link=img_link_tag.get('href')
 
-				link=text_manip.ensure_UTF8(link)		
-				mapped_link="https://"+self.wiki_domain+link
-
-				if link[:11]=="/wiki/File:":
+			if  img_link[:6]=="/wiki/" and "/wiki/Special:" not in img_link and "/wiki/Template:" not in img_link and "/wiki/Portal:" not in img_link and "/wiki/Wikipedia:" not in img_link and "/wiki/Help:" not in img_link:  #only extracts links to wikipedia 
+				img_link=text_manip.ensure_UTF8(img_link)		
+				mapped_link="https://"+self.wiki_domain+img_link
+				if img_link[:11]=="/wiki/File:":
 					if link[-4:]=='.ogg': #video or audio file
 						self.wiki_media_links_to_real_map[link]=mapped_link
 						self.media_links.append(mapped_link)
 					else: 
 						self.wiki_img_links_to_real_map[link]=mapped_link
 						self.img_links.append(mapped_link)
+		''' 
 
-				else :
+		for link_tag in article_soup.find_all('a'):
+			link=link_tag.get('href')
+			# print count,"]",link
+			# count+=1
+			
+			if  link[:6]=="/wiki/" and "/wiki/Special:" not in link and "/wiki/Template:" not in link and "/wiki/Portal:" not in link and "/wiki/Wikipedia:" not in link and "/wiki/Help:" not in link:  #only extracts links to wikipedia article pages
+				# print "\t",other_count,"]",link
+				# other_count+=1
+
+				link=text_manip.ensure_UTF8(link)		
+				mapped_link="https://"+self.wiki_domain+link
+
+				if link[:11] != "/wiki/File:":
 					self.wiki_links_to_real_map[link]=mapped_link
+					self.real_links_to_wiki_article_map[mapped_link]=link
 					self.article_links.append(mapped_link)
+				else :
+					if link[-4:]=='.ogg': #video or audio file
+						self.wiki_media_links_to_real_map[link]=mapped_link
+						self.media_links.append(mapped_link)
+						self.real_links_to_wiki_media_map[mapped_link]=link
+					else: 
+						self.wiki_img_links_to_real_map[link]=mapped_link
+						self.img_links.append(mapped_link)
+						self.real_links_to_wiki_img_map[mapped_link]=link
+
+		
+
+
 
 		self.article_links=list(set(self.article_links))
 		self.img_links=list(set(self.img_links))
 		self.media_links=list(set(self.media_links))
+		# print "\n\n\narticle_links:\n\n"
+		# for i in self.article_links:
+		# 	print i
+		# print "\n\n\nimg_links:\n\n"
+		# for i in self.img_links:
+		# 	print i
+		# print "\n\n\nmedia_links:\n\n"
+		# for i in self.media_links:
+		# 	print i
 
-		
+
 
 		
 		# self.replaced_html=self.html
@@ -255,6 +290,7 @@ class Wikipedia_img_page_object:
 			max_index=max(self.img_px_to_links_map)
 			max_link=self.img_px_to_links_map[max_index][0]
 			self.saved_path=text_manip.get_file( url=max_link, folderpath=folderpath ) #max(dictionary) == max key in dictionary
+			self.saved_filename=self.saved_path.split('/')[-1]
 		else:
 			print "ERROR in download_smallest_image: The extraction is empty. Downloading main image instead"
 			self.download_main_image(folderpath)
@@ -264,16 +300,99 @@ class Wikipedia_img_page_object:
 		if self.img_px_to_links_map!={}:
 			min_index=min(self.img_px_to_links_map)
 			min_link=self.img_px_to_links_map[min_index][0]
-			self.saved_path=text_manip.get_file( url=min_link, folderpath=folderpath ) 
+			self.saved_path=text_manip.get_file( url=min_link, folderpath=folderpath )
+			self.saved_filename=self.saved_path.split('/')[-1] 
 		else:
 			print "ERROR in download_smallest_image: The extraction is empty. Downloading main image instead"
 			self.download_main_image(folderpath)
 
 
 
+def download_wiki_page(wiki_link, parent_folder_path): 
+	#downloads wikipedia pages and images (in a seperate folder), and links the pages to the images
+
+	wiki_obj=Wiki_page_obj(wiki_link)
+
+	imgs_folder_name="imgs_%s"%(wiki_obj.heading)
+	imgs_folder_path=text_manip.make_folder_path(parent_folder_path=parent_folder_path, folder_name=imgs_folder_name)
+
+	text_manip.make_directory_if_not_exists(imgs_folder_path, printing=False)
+
+	img_links_to_filenames_map={}
+
+	for img_link in wiki_obj.img_links:
+		image=Wikipedia_img_page_object(img_link)
+		image.download_smallest_image(imgs_folder_path)
+
+		if image.saved_filename is not None: # maps wiki_links to saved file links
+			img_wiki_link=wiki_obj.real_links_to_wiki_img_map[img_link]
+			img_links_to_filenames_map[img_wiki_link]=image.saved_filename
+
+	# Linking logic:
+	# Here, we edit the .html of the wiki_object directly, since  we aren't going to use it later
 
 
-def wiki_get_all(root_link, max_depth=1, input_root_folderpath="./"):
+
+	output_wiki_filepath=wiki_obj.write_to_file(parent_folder_path)
+
+
+
+
+
+
+
+
+
+def wiki_get_all(root_link, max_depth=1, input_root_folderpath="./", skip_already_downloaded=False):
+
+	'''	
+	Given a root link and the input_root_folderpath, it creates a folder, input_root_folderpath/root_<root.heading>, inside which we have the root link, it's associated images, and folders "lvl1", "lvl2", etc. (i.e. as input_root_folderpath/root_<root.heading>/lvl1/, input_root_folderpath/root_<root.heading>/lvl2/, etc.), into which we must download all the links of the closure, upto "lvl<max_depth>". These are organized sequentially because it decreases the overall path length, than if the folders lvl1, lvl2 etc. were nested inside each other.
+	This design also allows you to copy or move the folder root_<root.heading> to any place you desire; it will still work so long as you don't move around the files and folders inside. So, basically, this application, given a root link about a certain topic, downloads all the associated articles related to a certain topic. It captures them in a neat little package that you can then send to someone else, so that they can learn about the topic (this was the main incentive for building this application).
+
+
+
+	Salient points to be noted while using the application:
+
+	The application essentially is a breadth-first-search, because a depth-first search on the <strong>INTERNET</strong> can lead you anywhere at all and is inadvisabe, espcially when trying to learn about something which first requires you learn from links to other items, such as Wikipedia and other encyclopediac sites.
+
+	The files and folders that are downloaded form a self-contained ecosystem. The hyperlinks in the html have been modified, so that they now point to each other in the filesystem. eg: an html file in input_root_folderpath/root_<root.heading>/lvl1/ which originally had a link in it's article such as "https://en.wikipedia.org/wiki/IBM", might have the link replaced by ../lvl2/IBM.html, if we downloaded IBM.html to /lvl2/. 
+	This allows us to start at any link and browse any link that is downloaded (though you'd probably want to start at the root, since that's why you ran this application).
+	Obviously, some links are not downloaded, because of max_depth. The non-downloaded links are those not in the closure of depth max_depth; by definition, these will be found, if at all, in the pages in the last level, i.e. /lvl<max_depth>. The application provides hyperlinks for non-downloaded links, so you may connect to the internet and visit them. 
+
+	Suppose you realize that your max_depth specification was not sufficient. No problem, you don't need to download all the links over again. You just set the skip_already_downloaded flag to True, and the function gets all the links from the last level, upto the new max_depth. 
+	Note: because this flag is there to reduce data usage, it will necessarily skip over all the /lvl<depth>/ folders, without checking the actual contents (because tracing the links would require downloading all the pages' HTML all over again). The assumption is that they have been downloaded correctly, and the application will start getting fresh links from the files of /lvl<max_depth>/.
+
+	Styling is another issue. Since this application explores article links which are contained to Wikipedia, the styling is assumed to be the same for all the links. Thus, only the styling of the root is downloaded, and all the files are made to link to that style file. It is possible (and fairly easy) to implement a feature that downloads the styles for each file seperately, but for now it is not implemented.
+	This in fact brings me to the most important point of this application: swappability and generalization. This application may have been crafted espcially for Wikipedia, but if you have the patience, it can easily be generalized for any website. That makes it a very powerful data and research tool.
+
+
+
+
+
+
+	This function works in two passes:
+		Pass1: 
+			- start with the root, make a seperate folder for it inside the input_root_folderpath, as input_root_folderpath/root_<root.heading>
+			- create a folder inside this as input_root_folderpath/root_<root.heading>/img_<root.heading>
+			- download its associated images to input_root_folderpath/root_<root.heading>/img_<root.heading>, modify the root's html to link to these images, then write to file the root's modified html (to input_root_folderpath/root_<root.heading>)
+			- append the root's filename and level to a dict, where 
+				- key is the root's __wiki__ url
+				- values are a tuple: (level, filename)
+			- create a level-wise dict of all article_links of that level. For the root, that is just the root's article_links.
+			- Do the following for every level (root's level is 0):
+				- Create a folder called "lvl"+str(current_level+1) in the input_root_folderpath/root_<root.heading>
+				- for each link in this level:
+					- check the dictionary if the dict[link] is empty, i.e. (level, filename0 does not exist. If it exists, then we already have the file, so skip to the next child article_link.
+					- If the link does not exist, download the link & images to input_root_folderpath/root_<root.heading>/lvl1/, (same format as we did the root).
+					- append the child article_link's to dict[link]=(level, filename), i.e. to the dictionary of downloaded links, so that it is not downloaded twice in the future.
+					- append this link's child article_links, to the level-order child article_links dict (make sure no repeats
+
+
+		Pass2: 
+			- links all the files to one another.
+
+		We keep this as two seperate passes to reduce redundant data usage (by not downloading links that are already there) at the (minimal) cost of time. 
+	'''
 	
 	root_wiki_obj=Wiki_page_obj(root_link)
 
@@ -285,8 +404,8 @@ def wiki_get_all(root_link, max_depth=1, input_root_folderpath="./"):
 	root_wiki_obj.write_to_file(root_folder_path)
 
 	style_file_path=text_manip.make_file_path(root_folder_path, "wiki_style",".css")
-	# with open(style_file_path, "w") as style_file:
-	# 	style_file.write(text_manip.ensure_ASCII(root_wiki_obj.get_external_styling() ))
+	with open(style_file_path, "w") as style_file:
+		style_file.write(text_manip.ensure_ASCII(root_wiki_obj.get_external_styling() ))
 
 
 	root_imgs_folder_name="imgs_%s"%(root_wiki_obj.heading)
