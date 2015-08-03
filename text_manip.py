@@ -2,12 +2,17 @@
 #text_manip.py
 import re
 import urllib2
-import unicodedata
+# import unicodedata
 from bs4 import BeautifulSoup
-import nltk
-from xgoogle.search import GoogleSearch, SearchError
+# import nltk
+# from xgoogle.search import GoogleSearch, SearchError
 import os
 import random
+
+
+def HTML_attribute_content_replace(text, attr, current, replace_with):
+	return text.replace('%s="%s'%(attr,current),  '%s="%s'%(attr,replace_with))
+
 
 def remove_after(regex, text):
 	found_string= re.findall(pattern=regex, string=text) #only take the first; we can run this as many times as necessary	
@@ -94,6 +99,16 @@ def make_directory_if_not_exists(folderpath, printing=True):
 		return False
 
 
+
+def list_files_in_folder_with_extension(folderpath, extension):
+	#just returns the filenames
+	ext_len=len(extension)
+	temp_list=get_files_in_folder(folderpath)
+	ret_list=[]
+	for file_name in temp_list:
+		if file_name[(-1)*ext_len:] == extension:
+			ret_list.append(file_name)
+	return ret_list
 
 def get_files_in_folder(folderpath):
 	#just returns the filenames
@@ -228,63 +243,62 @@ def num_to_words(num):
 		return str(float(num)/pow(10,3))+" thousand"
 
 
-def google_search_redirect(random_text): #throws Google off the scent
-	print "\tRedirect...."
-	try:
-		search_query=article_supersplit(random_text)
-		search_query=search_query[random.randrange(0, len(search_query))]
-		search_query=search_query[random.randrange(0, len(search_query))]
-		search_query=remove_empty_from_list(search_query)
-		search_query=search_query[:random.randrange(3,4+len(search_query)%6)]
-		search_query=' '.join(search_query)
-	except Exception: 
-		search_query=random_text[:10]
-	search_query=re.sub("\.","",search_query)
-	search_query=re.sub(",","",search_query)
-	search_query=re.sub("`","",search_query)
-	google_search_results(search_query=search_query, number_of_results=5)
+# def google_search_redirect(random_text): #throws Google off the scent
+# 	print "\tRedirect...."
+# 	try:
+# 		search_query=article_supersplit(random_text)
+# 		search_query=search_query[random.randrange(0, len(search_query))]
+# 		search_query=search_query[random.randrange(0, len(search_query))]
+# 		search_query=remove_empty_from_list(search_query)
+# 		search_query=search_query[:random.randrange(3,4+len(search_query)%6)]
+# 		search_query=' '.join(search_query)
+# 	except Exception: 
+# 		search_query=random_text[:10]
+# 	search_query=re.sub("\.","",search_query)
+# 	search_query=re.sub(",","",search_query)
+# 	search_query=re.sub("`","",search_query)
+# 	google_search_results(search_query=search_query, number_of_results=5)
 
 
 
-
-def google_search_results(search_query, wait=40, number_of_results=10, encode=True):
-	''' DO NOT MESS WITH THIS IT IS PERFECT FOR NOW'''
-	# gets AT LEAST number_of_results results
-	# don't query too fast or Google will ban your IP
-	# for this purpose, I have added the variable max_result_size
-	print search_query
-	try:
-		max_result_size=10 #don't change it from this: the standard of 10 seems the least suspicious to google
-		gs = GoogleSearch(search_query, random_agent=True) # does not actually search
-		gs.results_per_page = max_result_size
+# def google_search_results(search_query, wait=40, number_of_results=10, encode=True):
+# 	''' DO NOT MESS WITH THIS IT IS PERFECT FOR NOW'''
+# 	# gets AT LEAST number_of_results results
+# 	# don't query too fast or Google will ban your IP
+# 	# for this purpose, I have added the variable max_result_size
+# 	print search_query
+# 	try:
+# 		max_result_size=10 #don't change it from this: the standard of 10 seems the least suspicious to google
+# 		gs = GoogleSearch(search_query, random_agent=True) # does not actually search
+# 		gs.results_per_page = max_result_size
 		
-		gs.page=0
-		times_tried=0
-		results=[]
-		prev=0
-		# print "getting results:"	
-		while len(results) < number_of_results:
-			prev=len(results)
-			times_tried+=1
-			time.sleep(random.uniform(0.5*wait, 1.5*wait))
-			results+=gs.get_results() # Actual search and extraction of results.
-			print "\rtimes_tried: %s\tlen(results): %s\tpage_number: %s"%(times_tried, len(results), gs.page),
-		print "\n"
+# 		gs.page=0
+# 		times_tried=0
+# 		results=[]
+# 		prev=0
+# 		# print "getting results:"	
+# 		while len(results) < number_of_results:
+# 			prev=len(results)
+# 			times_tried+=1
+# 			time.sleep(random.uniform(0.5*wait, 1.5*wait))
+# 			results+=gs.get_results() # Actual search and extraction of results.
+# 			print "\rtimes_tried: %s\tlen(results): %s\tpage_number: %s"%(times_tried, len(results), gs.page),
+# 		print "\n"
 
-		# We now have a list of SearchResult objects, called 'results'.
-		# A SearchResult object has three attributes -- "title", "desc", and "url".
-		# They are Unicode strings, so do a proper encoding before outputting them. (done below)
-		if encode:
-			for i in range (0, len(results)):
-				results[i].title=results[i].title.encode("utf8", "ignore")
-				results[i].desc=results[i].desc.encode("utf8", "ignore")
-				results[i].url=results[i].url
-		# random.shuffle(results)
+# 		# We now have a list of SearchResult objects, called 'results'.
+# 		# A SearchResult object has three attributes -- "title", "desc", and "url".
+# 		# They are Unicode strings, so do a proper encoding before outputting them. (done below)
+# 		if encode:
+# 			for i in range (0, len(results)):
+# 				results[i].title=results[i].title.encode("utf8", "ignore")
+# 				results[i].desc=results[i].desc.encode("utf8", "ignore")
+# 				results[i].url=results[i].url
+# 		# random.shuffle(results)
 
-	except SearchError, e:
-		print "Search failed:\t%s" % e
+# 	except SearchError, e:
+# 		print "Search failed:\t%s" % e
 
-	return results
+# 	return results
 
 
 
@@ -373,18 +387,18 @@ def extract_links(article): #extracts links from HTML code
 	
 	
 
-def properly_encode(article, input_encoding="UTF-8"):
+# def properly_encode(article, input_encoding="UTF-8"):
 	
-	article=article.decode(input_encoding)
-	article = article.replace(u"\u2022", "*")
-	# article = article.replace(u"\u2022", "*")
-	# print article.encode('utf-8')
-	article=unicodedata.normalize('NFKD', article).encode('ascii','ignore')
+# 	article=article.decode(input_encoding)
+# 	article = article.replace(u"\u2022", "*")
+# 	# article = article.replace(u"\u2022", "*")
+# 	# print article.encode('utf-8')
+# 	article=unicodedata.normalize('NFKD', article).encode('ascii','ignore')
 	
-	# article = article.encode('unicode_escape')
-	# article=article.encode('ascii')
-	# print article
-	return article
+# 	# article = article.encode('unicode_escape')
+# 	# article=article.encode('ascii')
+# 	# print article
+# 	return article
 
 def shorten_whitespace(str): 	
 	# removes streches of whitespace 

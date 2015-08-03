@@ -389,11 +389,11 @@ def link_to_style_file(style_file_path, input_html_file_path=None, input_raw_htm
 		print "ERROR: in link_to_style_file, both input_html_file and input_raw_html cannot be None"
 		exit(0)
 
-	
-	html=html.replace("</head>", '<link rel="stylesheet" href="%s"/></head>'%style_file_path)
 
 	if remove_external_stylesheets:
 		html=text_manip.regex_and_remove(regex='<link.*rel="stylesheet".*?/.*?>', text=html)
+
+	html=html.replace("</head>", '<link rel="stylesheet" href="%s"/></head>'%style_file_path)
 
 	if input_raw_html is not None:
 		return html	
@@ -402,6 +402,42 @@ def link_to_style_file(style_file_path, input_html_file_path=None, input_raw_htm
 		with open(input_html_file_path, "w") as output_html_file:
 			output_html_file.write(html)
 	
+
+
+def replace_links(folderpath, downloaded_pages, style_file_relative_path):
+	html_file_names= text_manip.list_files_in_folder_with_extension(folderpath=folderpath, extension=".html")
+	html=""
+	for html_file_name in html_file_names:
+		filepath=text_manip.make_file_path(folderpath=folderpath, filename=html_file_name, extension="")
+		with open(filepath, "r") as html_file:
+			html=html_file.read()
+			for page_link in downloaded_pages:
+				if folderpath.split('/')[-1][:5]=="root_": # if we are dealing with the root html file
+					filesystem_link="./lvl%s/%s"%(downloaded_pages[page_link][0], downloaded_pages[page_link][1])
+				else:
+					if downloaded_pages[page_link][0] == 0: # root
+						filesystem_link="../%s"%(downloaded_pages[page_link][1])
+					else: filesystem_link="./lvl%s/%s"%(downloaded_pages[page_link][0], downloaded_pages[page_link][1])
+
+				# old = html
+				
+				html=text_manip.HTML_attribute_content_replace(text=html, attr="href", current=page_link, replace_with=filesystem_link)
+				# if html !=old:
+					# print "REPLACED: %s----->%s"%(page_link, filesystem_link)	
+					
+			html_file.close()
+
+		html=link_to_style_file(style_file_path=style_file_relative_path, input_raw_html=html, remove_external_stylesheets=True)
+		with open(filepath, "w") as html_file:
+			html_file.write(html)
+			html_file.close()
+
+
+
+
+
+
+
 
 
 
@@ -484,7 +520,7 @@ def wiki_get_all(root_link, max_depth=1, input_root_folderpath="./", skip_alread
 
 	#	make a dict of already downloaded pages. Use the relative paths
 	downloaded_pages=defaultdict(lambda:None)
-	downloaded_pages[root_link]=(0,"../"+root_full_html_filepath.split('/')[-1])
+	downloaded_pages[root_link]=(0,root_full_html_filepath.split('/')[-1])
 
 	#	make a dict of pages we must now download
 	associated_links=defaultdict(lambda:[])
@@ -513,7 +549,7 @@ def wiki_get_all(root_link, max_depth=1, input_root_folderpath="./", skip_alread
 					# print "\rDone Downloading",
 					if current_level+1 != max_depth:
 						associated_links[current_level+1].append(download_tuple[1])
-					downloaded_pages[associated_link]=(current_level+1, "../"+child_folder_name+ download_tuple[0].split('/')[-1])
+					downloaded_pages[associated_link]=( current_level+1, download_tuple[0].split('/')[-1] )
 					download_count+=1
 					print "\r\tNumber of pages downloaded so far = %s"%download_count,
 		if current_level+1 != max_depth:
@@ -525,202 +561,21 @@ def wiki_get_all(root_link, max_depth=1, input_root_folderpath="./", skip_alread
 		print "\tNumber of links to next level= "+str(len(associated_links[current_level+1]))
 
 
+	# print "\n\n\nDOWNLOADED PAGES:"
+	# for page in downloaded_pages:
+	# 	print str(page),"--->",str(downloaded_pages[page])
 
 
-
-
-
-
-
-
-
-
-
-
-		
-
-
-
+	#	replace all links with links to the filesystem:
 	
+	# replace root links:
+	style_file_relative_path="./wiki_style.css"
+	replace_links(folderpath=root_folder_path, downloaded_pages=downloaded_pages, style_file_relative_path=style_file_relative_path)
+	# replace rest of links
+	style_file_relative_path="../wiki_style.css"
+	for current_level in range(1,max_depth+1):
+		lvl_folder=text_manip.make_folder_path(parent_folder_path=root_folder_path, folder_name="lvl%s"%(current_level))
+		replace_links(folderpath=lvl_folder, downloaded_pages=downloaded_pages, style_file_relative_path=style_file_relative_path)
 
 
 
-
-
-
-
-
-
-
-	
-	
-	
-
-	
-
-
-
-	
-
-
-
-
-
-"""
-def fetch_wikipedia_pages(filepath, link, depth=1, is_root=True):
-
-	heading = re.search('''(?<=/wiki/)(?!Portal:)(?!Help:).*''', link, re.I)
-	heading=heading.group(0).strip()
-	print "\n\n\n\n\n\t\t\tCurrently processing:%s"%heading
-	#heading is the file path, gotten from the link, not the html 
-
-	html=text_manip.get_html(link)
-	soup = BeautifulSoup(html)
-	html = soup.prettify().encode("utf-8",'ignore')
-	fileout_path=""
-	if is_root==True:
-		article_title=re.search('''(?<=<h1 class="firstHeading" id="firstHeading" lang="en">\n).*''', html, re.I)
-		article_title=article_title.group(0)
-		article_title=article_title.strip()
-		fileout_path=filepath+"/%s.html"%article_title
-	else:
-		fileout_path=filepath+"/%s.html"%heading
-	fileout=open(fileout_path, "w+")
-	fileout.write(html)
-	fileout.close()
-
-	html_replaced_links=html
-	if(depth>0):
-
-		article = re.search('''<div class="mw-content-ltr" dir="ltr" id="mw-content-text" lang="en">(\n.*)+((<span class="mw-headline" id="References">)|(<span class="mw-headline" id="External_links">))''', html, re.I)
-		if (article==None):
-			print "Cannot parse "+link
-			exit(0)
-		article=article.group(0)
-	
-		hyperlink_pattern = re.compile(r'(?<=<a href=")/wiki/(?!Portal:)(?!Help:).*?(?=")') 
-		#the pattern for recognizing hyperlinks in the article, which we must fetch
-
-		print "\t\t\tQueued for processing:\n"
-		hyperlinks=[]
-		base_website_url="http://en.wikipedia.org"
-		j=1
-		for hlink in re.findall(hyperlink_pattern, article):	
-			print "\t\t\t"+str(j)+".  "+base_website_url+hlink
-			hyperlinks.append(base_website_url+hlink)
-			j+=1
-
-		#hyperlinks[] now contains the deeper links which we must fetch recursively
-		for i in hyperlinks:
-			hyp_heading=fetch_wikipedia_pages(filepath,i, depth=depth-1, is_root=False) 
-			#ensures that before we link an article to the file, the file actually exists
-
-			regex='(?<=<a href=")/wiki/(?!Portal:)(?!Help:)%s(?=")'%hyp_heading
-			print "\tRegex = "+regex
-
-			fileout_path_hyp=hyp_heading+".html"
-			print "\tFile_out_path_hyp = "+fileout_path_hyp
-			html_replaced_links= re.sub(regex, fileout_path_hyp, html_replaced_links)
-			fileout=open(fileout_path, "w+")
-			fileout.write(html_replaced_links)	
-			fileout.close()
-			#writing to the file multiple times ensures that if we encounter an error, we still get the links we have saved.	
-	
-	return heading
-
-
-
-
-
-
-def fetch_wikipedia_pages_sort_of_working(filepath, link, depth=1):
-
-	html=text_manip.get_html(link)
-	soup = BeautifulSoup(html)
-	html = soup.prettify().encode("utf-8",'ignore')
-	heading=re.search('''(?<=<h1 class="firstHeading" id="firstHeading" lang="en">\n).*''', html, re.I)
-	# heading = re.search('''/wiki/(?!Portal:)(?!Help:).*''', link, re.I)
-	heading=heading.group(0).strip()
-
-	fileout_path=filepath+"/"+heading+".html"
-	fileout=open(fileout_path, "w+")
-	fileout.write(html)
-
-	html_replaced_links=html
-
-	article = re.search('''<div class="mw-content-ltr" dir="ltr" id="mw-content-text" lang="en">(\n.*)+((<span class="mw-headline" id="References">)|(<span class="mw-headline" id="External_links">))''', html, re.I)
-	if (article==None):
-		print "Cannot parse "+link
-		exit(0)
-	article=article.group(0)
-	print "\n\n\n\n\n\t\t\tCurrently processing:%s"%heading
-	if(depth>0):
-		pattern = re.compile(r'(?<=<a href=")/wiki/(?!Portal:)(?!Help:).*?(?=")')
-		hyperlinks=[]
-		website="http://en.wikipedia.org"
-		print "\t\t\tQueued for processing:\n"
-		for hlink in re.findall(pattern, article):	
-			print "\t\t\t"+website+hlink
-			hyperlinks.append(website+hlink)
-		for i in hyperlinks:
-			hyp_heading=fetch_wikipedia_pages(filepath,i, depth-1)
-			hyp_heading_underscore=re.sub(" ","_",hyp_heading)
-			regex='(?<=<a href=")/wiki/(?!Portal:)(?!Help:)%s(?=")'%hyp_heading_underscore
-			print "\tRegex = "+regex
-			# fileout_path_hyp=filepath+"/"+hyp_heading+".html"
-			fileout_path_hyp=hyp_heading+".html"
-			print "\tFile_out_path_hyp = "+fileout_path_hyp
-			html_replaced_links= re.sub(regex, fileout_path_hyp, html_replaced_links)
-
-
-	fileout_path=filepath+"/"+heading+".html"
-	fileout=open(fileout_path, "w+")
-	fileout.write(html_replaced_links)	
-		
-	return heading
-
-
-
-
-
-
-
-
-
-
-
-def fetch_wikipedia_pages_working(filepath, link, depth=1):
-
-	html=text_manip.get_html(link)
-	soup = BeautifulSoup(html)
-	html = soup.prettify().encode("utf-8",'ignore')
-	heading=re.search('''(?<=<h1 class="firstHeading" id="firstHeading" lang="en">\n).*''', html, re.I)
-	heading=heading.group(0).strip()
-	
-	fileout_path=filepath+"/"+heading+".html"
-	fileout=open(fileout_path, "w+")
-	fileout.write(html)
-	article = re.search('''<div class="mw-content-ltr" dir="ltr" id="mw-content-text" lang="en">(\n.*)+((<span class="mw-headline" id="References">)|(<span class="mw-headline" id="External_links">))''', html, re.I)
-	if (article==None):
-		print "Cannot parse "+link
-		exit(0)
-	article=article.group(0)
-	print "\n\n\n\n\n\t\t\tCurrently processing:%s"%heading
-	if(depth>0):
-		pattern = re.compile(r'(?<=<a href="/wiki/)(?!Portal:)(?!Help:).*?(?=")')
-		hyperlinks=[]
-		website="http://en.wikipedia.org/wiki/"
-		print "\t\t\tQueued for processing:\n"
-		j=1
-		for hlink in re.findall(pattern, article):	
-			print "\t\t\t"+str(j)+".\t"+website+hlink
-			hyperlinks.append(website+hlink)
-			j+=1
-		for i in hyperlinks:
-			fetch_wikipedia_pages(filepath,i, depth-1)
-
-
-
-
-fetch_wikipedia_pages(filepath="F:\Workspaces\Python\Wikipedia", link="http://en.wikipedia.org/wiki/Natural_language_processing")
-"""
